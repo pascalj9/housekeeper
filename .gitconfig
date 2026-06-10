@@ -1,0 +1,20 @@
+[user]
+	email = pascaljia9@gmail.com
+	name = Pascal Jia
+[core]
+	editor = vim
+	whitespace = fix,-indent-with-non-tab,trailing-space,cr-at-eol
+	autocrlf = true
+[alias]
+# example: https://gist.github.com/pksunkara/988716
+	aa = add --all
+	cm = commit --amend
+	cmn = commit --amend --no-edit
+	lg = log --oneline --graph --decorate --pretty=format:'%C(auto)%h %d %s %Cgreen(%an)'
+	o = checkout
+	psf = push --force-with-lease
+	ppp = "!f() { git aa && if git diff --cached --quiet; then echo 'nothing staged, skipping'; else git cmn && git psf; fi; }; f"
+	s = status
+	br = for-each-ref --color=always --sort=-committerdate refs/heads/ --format='%(color:yellow)%(committerdate:short)%(color:reset)'
+[pull]
+	rebase = true

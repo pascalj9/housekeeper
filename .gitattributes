@@ -1,0 +1,19 @@
+# Normalize line endings: store everything as LF in the repo, let Git
+# convert to the platform default on checkout for text files.
+* text=auto eol=lf
+
+# Shell scripts MUST stay LF — running them on Linux/WSL with CRLF
+# breaks the shebang (`/usr/bin/env: 'bash\r': No such file or directory`).
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# Binary files — never touch.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.pdf   binary

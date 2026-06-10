@@ -1,0 +1,149 @@
+# =============================================================================
+# Housekeeper .gitignore
+# =============================================================================
+
+# ---- OS ---------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---- Editors / IDEs ---------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+*~
+.netrwhist
+
+# ---- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# uv / poetry / pipenv
+.uv/
+poetry.lock.bak
+Pipfile.lock.bak
+
+# ---- Node / TypeScript (chat-web) ------------------------------------------
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.yarn-cache/
+.pnp.*
+*.tsbuildinfo
+.next/
+.turbo/
+.parcel-cache/
+.vite/
+dist-ssr/
+
+# ---- Secrets / credentials --------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+.secrets/
+~/.housekeeper/secrets
+
+# ---- Local config overrides -------------------------------------------------
+configs/*.local.yaml
+configs/local/
+*.local.yaml
+*.local.yml
+
+# ---- Models / weights (large, fetched by bootstrap_models.sh) --------------
+models/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.mlpackage/
+*.mlmodelc/
+
+# ---- Runtime data (timeline DB, vector index, snapshots, logs) -------------
+data/
+var/
+runtime/
+snapshots/
+clips/
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-journal
+*.lance/
+embeddings/
+logs/
+*.log
+*.log.*
+
+# ---- Process / pid files ----------------------------------------------------
+*.pid
+*.sock
+
+# ---- Audio/video samples (don't commit footage) -----------------------------
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.wav
+*.mp3
+*.m4a
+
+# ---- Misc -------------------------------------------------------------------
+tmp/
+.cache/
+*.bak
+*.orig
+*.rej
