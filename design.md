@@ -280,7 +280,8 @@ embed: { provider: ollama, name: nomic-embed-text }
 Each phase ends with a **runnable, demoable** slice. No time estimates. Check items off as you complete them.
 
 ### Phase 0 — Bootstrap
-- [ ] Initialize repo, Python project (uv or poetry), pre-commit, ruff, pytest.
+- [x] Initialize repo, Python project (uv or poetry), pre-commit, ruff, pytest.
+  - **Implemented as `uv`-managed project with `src/` layout**; see [Phase 0.1 notes](#phase-01-implementation-notes) below and the [runbook](runbook.md#2-repository-setup) for daily commands.
 - [ ] Install Ollama + MLX, pull baseline models.
 - [ ] Write `bootstrap_models.sh`.
 - [ ] Set up Tailscale as a background service.
@@ -288,6 +289,22 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
 - [ ] Set up NATS server via `launchd`.
 - [ ] Build `housekeeper doctor` CLI (verifies camera reachability, model load, bus connectivity, ntfy push).
 - [ ] **Deliverable**: `housekeeper doctor` passes end-to-end.
+
+#### Phase 0.1 implementation notes
+
+**Package manager**: `uv` (Astral) was chosen over poetry / pip-tools for speed, single-binary install, lockfile-by-default, and good cross-platform behavior (we develop on WSL, deploy on macOS). One-line install: `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+
+**Layout**: `src/`-layout (`src/housekeeper/...`). Reason: prevents accidental imports of the working copy when running tests, forcing the test suite to use the installed editable copy and catching missing-file bugs early.
+
+**CLI**: built on `typer` for ergonomic subcommands, rich help, and easy testing via `typer.testing.CliRunner`. Entry point declared in `pyproject.toml` as `housekeeper = "housekeeper.cli:app"`. Initial subcommands: `version`, `doctor` (placeholder until Phase 0.5). More land in later phases.
+
+**Cross-platform helper**: `housekeeper.platform_info` exposes `is_macos()`, `is_apple_silicon()`, `is_wsl()`, `supports_mlx()`. All platform branching in the codebase must go through this module, not raw `platform.system()` calls — keeps the WSL-vs-macOS handling centralized and unit-testable.
+
+**Lint + format**: `ruff` (lint + format in one tool). Configured in `pyproject.toml` with `E,W,F,I,B,UP,SIM,C4,RUF` rule families. 100-char line length. `E501` muted since the formatter handles wrapping.
+
+**Tests**: `pytest` with two custom markers — `macos` (tests that require Apple Silicon) and `integration` (tests that touch external services). `pytest-cov` enabled; current coverage is 90% (only the WSL detection `OSError` fallback is uncovered, which is fine). Tests live under `tests/` and use `--import-mode=importlib` so the `src/` layout works without packaging quirks.
+
+**Pre-commit**: hooks for trailing whitespace, EOF newline, YAML/TOML/large-file checks, merge conflicts, line-ending normalisation, and `ruff-check --fix` + `ruff format`. Install with `uv run pre-commit install`.
 
 ### Phase 1 — Video Pipeline MVP
 - [ ] `apps/ingest`: RTSP → frame ring buffer (ffmpeg/PyAV).
