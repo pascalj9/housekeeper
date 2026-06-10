@@ -73,7 +73,7 @@ git config --show-origin user.email   # should resolve from .gitconfig
 |---|---|
 | Run the CLI | `uv run housekeeper --help` |
 | Print version | `uv run housekeeper version` |
-| Health check (placeholder until Phase 0.5) | `uv run housekeeper doctor` |
+| Health check (placeholder until Phase 0.6) | `uv run housekeeper doctor` |
 | Run tests | `uv run pytest` |
 | Coverage report | `uv run pytest --cov` |
 | Lint + format check | `uv run ruff check . && uv run ruff format --check .` |
@@ -84,15 +84,87 @@ git config --show-origin user.email   # should resolve from .gitconfig
 
 ---
 
-## 4. Project layout (current)
+## 4. Local models (Phase 0.2)
+
+Housekeeper relies on locally-running models served by **Ollama** (every host)
+and **MLX** (Apple Silicon only, Phase 6+). See [`docs/models.md`](docs/models.md)
+for the model catalogue, profile breakdown, and memory budget.
+
+### 4.1 Install Ollama
+
+**macOS** (production host):
+```bash
+brew install ollama
+brew services start ollama         # auto-starts on login
+```
+
+**WSL2 / Linux** (dev host):
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+The installer normally starts the service for you. Verify it's reachable:
+```bash
+curl -fsS http://127.0.0.1:11434/api/tags
+# Expect JSON, e.g. {"models":[]} on a fresh install.
+```
+
+**Only if** the curl above fails ("Connection refused"), Ollama isn't
+running yet. Pick the option that matches your WSL setup:
+```bash
+systemctl status ollama   # modern WSL2 with systemd enabled — should be 'active (running)'
+sudo systemctl start ollama   # if it's installed but not running
+ollama serve &            # fallback: foreground daemon in the current shell
+```
+
+Re-run the `curl /api/tags` check until it returns JSON.
+
+### 4.2 Pull the models
+
+The bootstrap script picks a sensible profile for your host (`minimal` on WSL,
+`standard` on Apple Silicon Mac) and pulls only what's missing.
+
+```bash
+./scripts/bootstrap_models.sh                # default profile for this host
+./scripts/bootstrap_models.sh -p minimal     # smallest viable set (~4 GB)
+./scripts/bootstrap_models.sh -p standard    # adds the 7B brain (~9 GB)
+./scripts/bootstrap_models.sh -p full        # adds Tier-2 VLM (Mac only)
+./scripts/bootstrap_models.sh --dry-run      # show plan without downloading
+```
+
+**WSL dev recommendation**: stick with `minimal`. It's enough to exercise the
+perception pipeline (Phase 1+) and to run the small NL-rule evaluator.
+Tier-2 perception and the 14B brain only make sense on the Mac.
+
+The script is idempotent — re-running pulls only new/updated tags.
+
+### 4.3 Verify
+
+```bash
+uv run housekeeper models list               # show what's registered
+uv run housekeeper models verify             # check the default profile
+uv run housekeeper models verify -p full     # check a specific profile
+```
+
+Exit codes:
+- `0`: all models in the profile are available (or skipped for not-applicable backends).
+- `1`: at least one model is missing or Ollama is unreachable.
+- `2`: bad arguments (e.g. unknown profile).
+
+---
+
+## 5. Project layout (current)
 
 ```
 housekeeper/
 ├── src/housekeeper/        # package source
 │   ├── __init__.py         # exports __version__
 │   ├── cli.py              # Typer entry point (housekeeper ...)
+│   ├── models.py           # configs/models.yaml loader + verifier
 │   └── platform_info.py    # OS / arch detection helpers
 ├── tests/                  # pytest suite (mirrors src/)
+├── configs/                # versioned config (models.yaml, later cameras.yaml, rules.yaml)
+├── scripts/                # ops scripts (bootstrap_models.sh, …)
 ├── docs/                   # deep-dives that don't belong inline in design.md
 ├── design.md               # architecture + phased implementation plan
 ├── runbook.md              # this file
@@ -108,7 +180,7 @@ must use the installed editable copy via `uv run pytest`.
 
 ---
 
-## 5. Cross-platform notes
+## 6. Cross-platform notes
 
 | Concern | macOS | Linux / WSL |
 |---|---|---|
@@ -124,7 +196,7 @@ checks throughout the codebase.
 
 ---
 
-## 6. Phase status checklist
+## 7. Phase status checklist
 
 This mirrors §10 of `design.md`. Tick items here as you finish them in the
 field (vs. ticking them in the design doc, which tracks coding progress).
@@ -143,23 +215,23 @@ field (vs. ticking them in the design doc, which tracks coding progress).
 
 ---
 
-## 7. Operational tasks **you** own
+## 8. Operational tasks **you** own
 
 I (the agent) will not run these for you. They require accounts, hardware, or
 machine-level installs.
 
 - [ ] Install `uv` on your Mac (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
 - [ ] Install Homebrew on the Mac if you don't have it.
-- [ ] Install Tailscale (Phase 0.3) and approve the device.
-- [ ] Install Ollama (Phase 0.2) and accept its network permissions.
-- [ ] Pull model weights (Phase 0.2) — needs internet once.
+- [ ] **WSL dev (now)**: install Ollama (`curl -fsSL https://ollama.com/install.sh | sh`) and run `./scripts/bootstrap_models.sh -p minimal`.
+- [ ] **Mac (later)**: install Ollama (`brew install ollama && brew services start ollama`) and run `./scripts/bootstrap_models.sh`.
+- [ ] Install Tailscale (Phase 0.5) and approve the device.
 - [ ] Find your camera's RTSP URL + credentials (Phase 1).
 - [ ] Install the `ntfy` app on your phone and subscribe to your topic (Phase 2).
 - [ ] Approve macOS permissions for `Messages.app` automation (Phase 5).
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 ### `uv: command not found`
 `~/.local/bin` is not on your `$PATH`. Add this to `~/.bashrc` / `~/.zshrc`:

@@ -1,0 +1,61 @@
+# =============================================================================
+# Housekeeper model registry
+#
+# Single source of truth for every model the system uses. Both the bootstrap
+# script (`scripts/bootstrap_models.sh`) and the Python code
+# (`housekeeper.models`) read this file. Keep keys stable — they appear in
+# config and code.
+#
+# Sizes are approximate, post-download, in GB. Useful for the runbook table and
+# for `housekeeper doctor` to warn about disk pressure.
+# =============================================================================
+
+# Where Housekeeper expects local services. Overridable via env vars in code.
+endpoints:
+  ollama: "http://127.0.0.1:11434"
+
+# Logical model identifiers used across the codebase.
+models:
+  # Tier-1 VLM: cheap pre-filter for every motion event.
+  vlm_fast:
+    backend: ollama
+    name: moondream
+    role: "Tier-1 VLM (fast pre-filter)"
+    approx_gb: 1.7
+
+  # Text embeddings for semantic recall over events and notes.
+  embed:
+    backend: ollama
+    name: nomic-embed-text
+    role: "Text embeddings"
+    approx_gb: 0.3
+
+  # Cheap text model for natural-language rule evaluation and small chores.
+  llm_small:
+    backend: ollama
+    name: qwen2.5:3b
+    role: "Small LLM (NL rule eval, summaries)"
+    approx_gb: 1.9
+
+  # The agent's primary reasoning model. Start with 7B; bump to 14B once we
+  # know the M3's memory budget under sustained load (see design.md §5.5).
+  llm_brain:
+    backend: ollama
+    name: qwen2.5:7b-instruct
+    role: "Agent brain (LLM with tool calling)"
+    approx_gb: 4.7
+
+  # Tier-2 VLM: smart, on-demand. Apple Silicon only (MLX backend).
+  # Bootstrapping for this model is deferred to Phase 6.
+  vlm_smart:
+    backend: mlx
+    name: mlx-community/Qwen2.5-VL-7B-Instruct-4bit
+    role: "Tier-2 VLM (smart, on-demand) — Apple Silicon only"
+    approx_gb: 6.0
+
+# Profiles control which subset of `models` the bootstrap script pulls. The
+# script picks a default profile per platform (see scripts/bootstrap_models.sh).
+profiles:
+  minimal:  [vlm_fast, embed, llm_small]
+  standard: [vlm_fast, embed, llm_small, llm_brain]
+  full:     [vlm_fast, embed, llm_small, llm_brain, vlm_smart]

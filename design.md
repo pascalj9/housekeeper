@@ -282,7 +282,8 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
 ### Phase 0 — Bootstrap
 - [x] **0.1** Initialize repo, Python project (`uv`), pre-commit, ruff, pytest.
   - **Implemented as `uv`-managed project with `src/` layout**; see [Phase 0.1 notes](#phase-01-implementation-notes) below and the [runbook](runbook.md#2-repository-setup) for daily commands.
-- [ ] **0.2** Local inference + model bootstrap (Ollama install, pull baseline models, `scripts/bootstrap_models.sh`).
+- [x] **0.2** Local inference + model bootstrap (Ollama install, pull baseline models, `scripts/bootstrap_models.sh`).
+  - **Ollama-only for v1**, MLX deferred to Phase 6. See [Phase 0.2 notes](#phase-02-implementation-notes) and [docs/models.md](docs/models.md) for the model registry, profile breakdown, and memory budget.
 - [ ] **0.3** Self-hosted `ntfy` server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
 - [ ] **0.4** Local NATS server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
 - [ ] **0.5** Tailscale (ops install + `housekeeper doctor` reachability probe).
@@ -304,6 +305,24 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
 **Tests**: `pytest` with two custom markers — `macos` (tests that require Apple Silicon) and `integration` (tests that touch external services). `pytest-cov` enabled; current coverage is 90% (only the WSL detection `OSError` fallback is uncovered, which is fine). Tests live under `tests/` and use `--import-mode=importlib` so the `src/` layout works without packaging quirks.
 
 **Pre-commit**: hooks for trailing whitespace, EOF newline, YAML/TOML/large-file checks, merge conflicts, line-ending normalisation, and `ruff-check --fix` + `ruff format`. Install with `uv run pre-commit install`.
+
+#### Phase 0.2 implementation notes
+
+**Backend strategy**: Ollama-only for v1 (LLM brain, small LLM, Tier-1 VLM, embeddings). MLX is deferred to Phase 6 for the heavier Tier-2 VLM. Justification: one backend keeps the perception/agent code path identical on macOS, Linux and WSL, so dev-on-WSL → deploy-on-Mac requires no code changes. MLX is added later precisely where it wins (Apple-Silicon-native VLM throughput).
+
+**Model registry**: `configs/models.yaml` is the single source of truth. Logical keys (`vlm_fast`, `embed`, `llm_small`, `llm_brain`, `vlm_smart`) are stable across the codebase; the underlying model names can swap without code churn. The five logical roles, profile breakdown, and memory budget are documented in [`docs/models.md`](docs/models.md).
+
+**Profiles**: `minimal` (~4 GB) for WSL dev, `standard` (~9 GB) default for Apple Silicon, `full` (~15 GB) once Phase 6 lands. `housekeeper.models.default_profile()` picks the right one per host.
+
+**Loader/verifier**: `housekeeper.models` exposes Pydantic-validated config loading, profile resolution, and per-model availability probes (`verify_one`, `verify_profile`). The verifier is HTTP-only (talks to Ollama on `127.0.0.1:11434`) and never pulls — pulls are the bootstrap script's job. The `ollama_lister` argument is injected so unit tests run offline.
+
+**CLI**: new `housekeeper models` subcommand group — `models list` shows the registry and active profile; `models verify` returns exit code `0/1/2` for green/missing-or-unreachable/bad-args. This is the contract `housekeeper doctor` will call into for the model probe in Phase 0.6.
+
+**Bootstrap script**: `scripts/bootstrap_models.sh` is a thin bash wrapper that: detects platform, asks the Python loader for the profile members, fails loudly with cross-platform install instructions if Ollama is missing, then runs `ollama pull` for each Ollama-backed model (idempotent). MLX models in the profile are explicitly skipped with a "Phase 6" note. Supports `-p/--profile`, `--dry-run`, `--help`.
+
+**Test discipline**: 20 new tests cover schema validation, profile resolution, name-matching edge cases (`moondream` ↔ `moondream:latest`), platform branching for MLX, and the new CLI subcommands. Integration tests against a real Ollama daemon are tagged `@pytest.mark.integration` and will be added once we wire `housekeeper doctor` end-to-end in Phase 0.6.
+
+**Ops dependency**: actually pulling weights requires Ollama installed on the host. The runbook ([§4.1](runbook.md#41-install-ollama)) documents both the Homebrew path (Mac) and the curl-installer path (WSL).
 
 ### Phase 1 — Video Pipeline MVP
 - [ ] **1.1** `apps/ingest`: RTSP → frame ring buffer (ffmpeg/PyAV).
