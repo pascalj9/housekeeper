@@ -280,15 +280,14 @@ embed: { provider: ollama, name: nomic-embed-text }
 Each phase ends with a **runnable, demoable** slice. No time estimates. Check items off as you complete them.
 
 ### Phase 0 — Bootstrap
-- [x] Initialize repo, Python project (uv or poetry), pre-commit, ruff, pytest.
+- [x] **0.1** Initialize repo, Python project (`uv`), pre-commit, ruff, pytest.
   - **Implemented as `uv`-managed project with `src/` layout**; see [Phase 0.1 notes](#phase-01-implementation-notes) below and the [runbook](runbook.md#2-repository-setup) for daily commands.
-- [ ] Install Ollama + MLX, pull baseline models.
-- [ ] Write `bootstrap_models.sh`.
-- [ ] Set up Tailscale as a background service.
-- [ ] Set up self-hosted ntfy server via `launchd`.
-- [ ] Set up NATS server via `launchd`.
-- [ ] Build `housekeeper doctor` CLI (verifies camera reachability, model load, bus connectivity, ntfy push).
-- [ ] **Deliverable**: `housekeeper doctor` passes end-to-end.
+- [ ] **0.2** Local inference + model bootstrap (Ollama install, pull baseline models, `scripts/bootstrap_models.sh`).
+- [ ] **0.3** Self-hosted `ntfy` server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
+- [ ] **0.4** Local NATS server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
+- [ ] **0.5** Tailscale (ops install + `housekeeper doctor` reachability probe).
+- [ ] **0.6** Build `housekeeper doctor` CLI (verifies camera reachability, model load, bus connectivity, ntfy push).
+- [ ] **0.7** **Deliverable**: `housekeeper doctor` passes end-to-end.
 
 #### Phase 0.1 implementation notes
 
@@ -307,94 +306,94 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
 **Pre-commit**: hooks for trailing whitespace, EOF newline, YAML/TOML/large-file checks, merge conflicts, line-ending normalisation, and `ruff-check --fix` + `ruff format`. Install with `uv run pre-commit install`.
 
 ### Phase 1 — Video Pipeline MVP
-- [ ] `apps/ingest`: RTSP → frame ring buffer (ffmpeg/PyAV).
-- [ ] Auto-reconnect with exponential backoff + health metric.
-- [ ] `apps/perception`: motion gate (MOG2) on ring buffer.
-- [ ] pHash dedup for near-identical frames.
-- [ ] Tier-1 VLM (Moondream2) generates captions + tags.
-- [ ] Publish events to NATS (`video.events`).
-- [ ] Persist events to SQLite.
-- [ ] CLI viewer that tails events (`housekeeper tail`).
-- [ ] **Deliverable**: live captions of camera scene streaming in terminal.
+- [ ] **1.1** `apps/ingest`: RTSP → frame ring buffer (ffmpeg/PyAV).
+- [ ] **1.2** Auto-reconnect with exponential backoff + health metric.
+- [ ] **1.3** `apps/perception`: motion gate (MOG2) on ring buffer.
+- [ ] **1.4** pHash dedup for near-identical frames.
+- [ ] **1.5** Tier-1 VLM (Moondream2) generates captions + tags.
+- [ ] **1.6** Publish events to NATS (`video.events`).
+- [ ] **1.7** Persist events to SQLite.
+- [ ] **1.8** CLI viewer that tails events (`housekeeper tail`).
+- [ ] **1.9** **Deliverable**: live captions of camera scene streaming in terminal.
 
 ### Phase 2 — Notifier + Static Rules
-- [ ] `apps/rules`: YAML-driven matcher (tags / keyword regex).
-- [ ] Cooldowns and per-rule throttling.
-- [ ] `apps/notifier`: post to local ntfy with snapshot thumbnail.
-- [ ] Priority levels wired through ntfy.
-- [ ] Snapshot store directory layout + write path.
-- [ ] **Deliverable**: phone gets push when configured concepts appear (e.g., "person at door").
+- [ ] **2.1** `apps/rules`: YAML-driven matcher (tags / keyword regex).
+- [ ] **2.2** Cooldowns and per-rule throttling.
+- [ ] **2.3** `apps/notifier`: post to local ntfy with snapshot thumbnail.
+- [ ] **2.4** Priority levels wired through ntfy.
+- [ ] **2.5** Snapshot store directory layout + write path.
+- [ ] **2.6** **Deliverable**: phone gets push when configured concepts appear (e.g., "person at door").
 
 ### Phase 3 — Memory & Timeline
-- [ ] SQLite schema + migrations (hand-rolled or alembic-lite).
-- [ ] Tables: `events`, `messages`, `watches`, `notes`.
-- [ ] Embeddings via `nomic-embed-text` (Ollama).
-- [ ] sqlite-vec index over `events.caption` + `notes.text`.
-- [ ] Rolling hourly/daily summary job (small LLM call).
-- [ ] `housekeeper query "did anyone come by today?"` CLI.
-- [ ] **Deliverable**: queryable timeline + basic semantic search.
+- [ ] **3.1** SQLite schema + migrations (hand-rolled or alembic-lite).
+- [ ] **3.2** Tables: `events`, `messages`, `watches`, `notes`.
+- [ ] **3.3** Embeddings via `nomic-embed-text` (Ollama).
+- [ ] **3.4** sqlite-vec index over `events.caption` + `notes.text`.
+- [ ] **3.5** Rolling hourly/daily summary job (small LLM call).
+- [ ] **3.6** `housekeeper query "did anyone come by today?"` CLI.
+- [ ] **3.7** **Deliverable**: queryable timeline + basic semantic search.
 
 ### Phase 4 — Agent Core (read-only)
-- [ ] LLM server up (MLX or Ollama) with OpenAI-compatible function-calling.
-- [ ] Agent loop: subscribe to `video.events` + `chat.inbound`.
-- [ ] Tool: `query_timeline(time_range, filter)`.
-- [ ] Tool: `recall(query, k)`.
-- [ ] Tool: `send_message(text)`.
-- [ ] Tool: `send_notification(title, body, priority, image?)`.
-- [ ] Standing system prompt + persona.
-- [ ] Rolling context summary keeper (≤ 8k tokens).
-- [ ] **Deliverable**: agent autonomously messages user about interesting events.
+- [ ] **4.1** LLM server up (MLX or Ollama) with OpenAI-compatible function-calling.
+- [ ] **4.2** Agent loop: subscribe to `video.events` + `chat.inbound`.
+- [ ] **4.3** Tool: `query_timeline(time_range, filter)`.
+- [ ] **4.4** Tool: `recall(query, k)`.
+- [ ] **4.5** Tool: `send_message(text)`.
+- [ ] **4.6** Tool: `send_notification(title, body, priority, image?)`.
+- [ ] **4.7** Standing system prompt + persona.
+- [ ] **4.8** Rolling context summary keeper (≤ 8k tokens).
+- [ ] **4.9** **Deliverable**: agent autonomously messages user about interesting events.
 
 ### Phase 5 — Chat Gateway (two-way)
-- [ ] Define `chat.inbound` / `chat.outbound` schemas and topics.
-- [ ] `apps/chat-web`: FastAPI + HTMX chat UI.
-- [ ] Per-user conversation thread + history view.
-- [ ] Inline snapshot rendering in messages.
-- [ ] Expose via Tailscale only.
-- [ ] **iMessage channel** (outbound via `osascript`; inbound poller over `~/Library/Messages/chat.db`).
-- [ ] **Deliverable**: full two-way chat from phone browser **and** iMessage.
+- [ ] **5.1** Define `chat.inbound` / `chat.outbound` schemas and topics.
+- [ ] **5.2** `apps/chat-web`: FastAPI + HTMX chat UI.
+- [ ] **5.3** Per-user conversation thread + history view.
+- [ ] **5.4** Inline snapshot rendering in messages.
+- [ ] **5.5** Expose via Tailscale only.
+- [ ] **5.6** **iMessage channel** (outbound via `osascript`; inbound poller over `~/Library/Messages/chat.db`).
+- [ ] **5.7** **Deliverable**: full two-way chat from phone browser **and** iMessage.
 
 ### Phase 6 — Smart Perception (Tier-2 + on-demand looks)
-- [ ] Add Qwen2.5-VL-7B as Tier-2.
-- [ ] Lazy-load / unload Tier-2 based on idle timeout.
-- [ ] Tool: `request_detailed_look(camera, reason)` → re-runs Tier-2 on recent buffer.
-- [ ] Extend event schema (objects, attributes, relations).
-- [ ] High-priority notifications require Tier-2 confirmation.
-- [ ] **Deliverable**: agent can answer "what is the person wearing right now?" by triggering a closer look.
+- [ ] **6.1** Add Qwen2.5-VL-7B as Tier-2.
+- [ ] **6.2** Lazy-load / unload Tier-2 based on idle timeout.
+- [ ] **6.3** Tool: `request_detailed_look(camera, reason)` → re-runs Tier-2 on recent buffer.
+- [ ] **6.4** Extend event schema (objects, attributes, relations).
+- [ ] **6.5** High-priority notifications require Tier-2 confirmation.
+- [ ] **6.6** **Deliverable**: agent can answer "what is the person wearing right now?" by triggering a closer look.
 
 ### Phase 7 — Natural-Language Watches
-- [ ] Tool: `set_watch(rule_nl, expires_at?)`.
-- [ ] Tool: `list_watches()` / `cancel_watch(id)`.
-- [ ] Per-event NL-rule evaluator using small/fast model (e.g., Qwen2.5-3B).
-- [ ] Watch debounce + cooldown.
-- [ ] **Deliverable**: user can set/cancel arbitrary standing instructions in chat.
+- [ ] **7.1** Tool: `set_watch(rule_nl, expires_at?)`.
+- [ ] **7.2** Tool: `list_watches()` / `cancel_watch(id)`.
+- [ ] **7.3** Per-event NL-rule evaluator using small/fast model (e.g., Qwen2.5-3B).
+- [ ] **7.4** Watch debounce + cooldown.
+- [ ] **7.5** **Deliverable**: user can set/cancel arbitrary standing instructions in chat.
 
 ### Phase 8 — Robustness & Ops
-- [ ] Health endpoints for every service.
-- [ ] `housekeeper status` dashboard.
-- [ ] Auto-restart via `launchd KeepAlive`.
-- [ ] Backpressure + queue-length metrics.
-- [ ] Drop-policy when VLM falls behind.
-- [ ] Log rotation.
-- [ ] Snapshot retention policy job.
-- [ ] Outbound-network-policy integration test (no third-party hosts).
-- [ ] **Deliverable**: runs unattended for a week.
+- [ ] **8.1** Health endpoints for every service.
+- [ ] **8.2** `housekeeper status` dashboard.
+- [ ] **8.3** Auto-restart via `launchd KeepAlive`.
+- [ ] **8.4** Backpressure + queue-length metrics.
+- [ ] **8.5** Drop-policy when VLM falls behind.
+- [ ] **8.6** Log rotation.
+- [ ] **8.7** Snapshot retention policy job.
+- [ ] **8.8** Outbound-network-policy integration test (no third-party hosts).
+- [ ] **8.9** **Deliverable**: runs unattended for a week.
 
 ### Phase 9 — Quality Pass
-- [ ] Build golden set of labeled snippets (porch, kitchen, etc.).
-- [ ] Perception regression harness against golden set.
-- [ ] Conversation eval set (over-notify / under-notify).
-- [ ] Tune motion thresholds and cooldowns per camera.
-- [ ] Prompt tuning pass on system prompt + tool descriptions.
-- [ ] **Deliverable**: precision/recall numbers, baseline metrics.
+- [ ] **9.1** Build golden set of labeled snippets (porch, kitchen, etc.).
+- [ ] **9.2** Perception regression harness against golden set.
+- [ ] **9.3** Conversation eval set (over-notify / under-notify).
+- [ ] **9.4** Tune motion thresholds and cooldowns per camera.
+- [ ] **9.5** Prompt tuning pass on system prompt + tool descriptions.
+- [ ] **9.6** **Deliverable**: precision/recall numbers, baseline metrics.
 
 ### Phase 10 — Stretch
-- [ ] Evaluate OpenClaw as Chat Gateway / Agent Core replacement (see §14).
-- [ ] Multi-camera + cross-camera identity ("same person at side gate then front door").
-- [ ] Audio events (doorbell, dog bark) via local ASR/keyword spotter.
-- [ ] Voice replies via TTS (e.g., Piper) when phone is on Wi-Fi.
-- [ ] Matrix bridge for chat (self-hosted Conduit/Synapse).
-- [ ] Encrypted backup of memory store.
+- [ ] **10.1** Evaluate OpenClaw as Chat Gateway / Agent Core replacement (see §14).
+- [ ] **10.2** Multi-camera + cross-camera identity ("same person at side gate then front door").
+- [ ] **10.3** Audio events (doorbell, dog bark) via local ASR/keyword spotter.
+- [ ] **10.4** Voice replies via TTS (e.g., Piper) when phone is on Wi-Fi.
+- [ ] **10.5** Matrix bridge for chat (self-hosted Conduit/Synapse).
+- [ ] **10.6** Encrypted backup of memory store.
 
 ---
 
