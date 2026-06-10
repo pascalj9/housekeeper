@@ -163,13 +163,16 @@ def verify_one(
     spec: ModelSpec,
     *,
     ollama_endpoint: str,
-    ollama_lister=_list_ollama_models,  # type: ignore[no-untyped-def]
+    ollama_lister=None,  # type: ignore[no-untyped-def]
 ) -> VerifyResult:
     """Check whether a single model is available on this host.
 
-    The ``ollama_lister`` argument exists for unit tests; production code uses
-    the default.
+    The ``ollama_lister`` argument exists for unit tests; when omitted, the
+    module-level ``_list_ollama_models`` is resolved at call time so that
+    tests can ``monkeypatch.setattr(models, "_list_ollama_models", ...)``.
     """
+    if ollama_lister is None:
+        ollama_lister = _list_ollama_models
     if spec.backend == "ollama":
         try:
             installed = ollama_lister(ollama_endpoint)

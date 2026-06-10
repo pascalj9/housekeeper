@@ -56,6 +56,11 @@ ignore = [
     "E501",  # line length handled by formatter
 ]
 
+# Typer's API requires calling typer.Option / typer.Argument in defaults; treat
+# them as immutable so B008 doesn't fire on every CLI command.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

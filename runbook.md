@@ -153,7 +153,106 @@ Exit codes:
 
 ---
 
-## 5. Project layout (current)
+## 5. Notifications · ntfy (Phase 0.3)
+
+Housekeeper pushes notifications through a **self-hosted ntfy** server. The
+ntfy phone app subscribes to a private topic and gets pushes.
+
+### 5.1 Install ntfy
+
+**macOS** (production host):
+```bash
+brew install ntfy
+```
+
+**WSL2 / Linux** (dev host) — official apt repo:
+```bash
+curl -sSL https://archive.heckel.io/apt/pubkey.txt | sudo apt-key add -
+sudo apt-add-repository 'deb https://archive.heckel.io/apt /'
+sudo apt update && sudo apt install ntfy
+```
+
+### 5.2 Create state directories and read the next-step hints
+
+```bash
+./scripts/bootstrap_ntfy.sh
+```
+
+This is idempotent — it creates `~/.housekeeper/var/ntfy/` and
+`~/.housekeeper/var/log/` and prints the install/launchctl/systemctl commands
+for your platform.
+
+### 5.3 Install the service unit
+
+**macOS** (launchd, runs on login):
+```bash
+# rewrite the placeholder paths and copy into LaunchAgents
+sed "s|__HOUSEKEEPER_REPO__|$PWD|g; s|__HOME__|$HOME|g" \
+    launchd/com.housekeeper.ntfy.plist \
+    > ~/Library/LaunchAgents/com.housekeeper.ntfy.plist
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.housekeeper.ntfy.plist
+```
+
+**WSL2 / Linux** (systemd user unit):
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/ntfy.service ~/.config/systemd/user/housekeeper-ntfy.service
+systemctl --user daemon-reload
+systemctl --user enable --now housekeeper-ntfy
+journalctl --user -u housekeeper-ntfy -f   # tail logs
+```
+
+Verify the server is up:
+```bash
+uv run housekeeper notify verify
+```
+
+### 5.4 Generate a private topic
+
+ntfy topics are public-by-default — anyone with the topic name can publish.
+Use `notify init` to write a random topic into the **gitignored** local
+override:
+
+```bash
+uv run housekeeper notify init
+# Wrote configs/services.yaml.local
+#   topic       : housekeeper-AbCdEf012345...
+#   publish URL : http://127.0.0.1:8080/housekeeper-AbCdEf012345...
+```
+
+Re-run with `--force` to rotate the topic.
+
+### 5.5 Subscribe your phone
+
+1. Install the **ntfy** app (iOS App Store / Google Play).
+2. Add a subscription using the publish URL from `notify show`:
+   ```bash
+   uv run housekeeper notify show
+   ```
+3. Hit it with a smoke test:
+   ```bash
+   uv run housekeeper notify send "Hello" "from housekeeper" \
+       --priority 4 --tags house,test
+   ```
+4. The notification should appear on your phone within a second.
+
+> **Reachability**: on the same Wi-Fi, the phone reaches the Mac by IP.
+> Once Tailscale (Phase 0.5) is up, point the phone at the Tailnet name so
+> notifications arrive from anywhere. Until then, you'll only see them on
+> your home network.
+
+### 5.6 CLI cheat-sheet
+
+| Command | Purpose |
+|---|---|
+| `uv run housekeeper notify init [--force]` | Generate / rotate private topic |
+| `uv run housekeeper notify show` | Print resolved endpoint + topic |
+| `uv run housekeeper notify send "title" "body" [-p 4] [-t a,b] [-c URL]` | Send one push |
+| `uv run housekeeper notify verify` | Probe the local ntfy server |
+
+---
+
+## 6. Project layout (current)
 
 ```
 housekeeper/
@@ -161,10 +260,14 @@ housekeeper/
 │   ├── __init__.py         # exports __version__
 │   ├── cli.py              # Typer entry point (housekeeper ...)
 │   ├── models.py           # configs/models.yaml loader + verifier
+│   ├── notifier.py         # ntfy notifier (Phase 0.3)
+│   ├── services.py         # configs/services.yaml loader (Phase 0.3)
 │   └── platform_info.py    # OS / arch detection helpers
 ├── tests/                  # pytest suite (mirrors src/)
-├── configs/                # versioned config (models.yaml, later cameras.yaml, rules.yaml)
-├── scripts/                # ops scripts (bootstrap_models.sh, …)
+├── configs/                # versioned config (models.yaml, services.yaml, ntfy/, …)
+├── scripts/                # ops scripts (bootstrap_models.sh, bootstrap_ntfy.sh)
+├── launchd/                # macOS service plists
+├── systemd/                # Linux/WSL user units
 ├── docs/                   # deep-dives that don't belong inline in design.md
 ├── design.md               # architecture + phased implementation plan
 ├── runbook.md              # this file
@@ -180,7 +283,7 @@ must use the installed editable copy via `uv run pytest`.
 
 ---
 
-## 6. Cross-platform notes
+## 7. Cross-platform notes
 
 | Concern | macOS | Linux / WSL |
 |---|---|---|
@@ -196,7 +299,7 @@ checks throughout the codebase.
 
 ---
 
-## 7. Phase status checklist
+## 8. Phase status checklist
 
 This mirrors §10 of `design.md`. Tick items here as you finish them in the
 field (vs. ticking them in the design doc, which tracks coding progress).
@@ -215,7 +318,7 @@ field (vs. ticking them in the design doc, which tracks coding progress).
 
 ---
 
-## 8. Operational tasks **you** own
+## 9. Operational tasks **you** own
 
 I (the agent) will not run these for you. They require accounts, hardware, or
 machine-level installs.
@@ -224,14 +327,16 @@ machine-level installs.
 - [ ] Install Homebrew on the Mac if you don't have it.
 - [ ] **WSL dev (now)**: install Ollama (`curl -fsSL https://ollama.com/install.sh | sh`) and run `./scripts/bootstrap_models.sh -p minimal`.
 - [ ] **Mac (later)**: install Ollama (`brew install ollama && brew services start ollama`) and run `./scripts/bootstrap_models.sh`.
+- [ ] **WSL dev (now)**: install ntfy + systemd user unit (see §5.1–5.3), then `uv run housekeeper notify init`.
+- [ ] **Mac (later)**: install ntfy + launchd plist (see §5.1–5.3), then `uv run housekeeper notify init`.
+- [ ] Install the `ntfy` app on your phone and subscribe to your topic (§5.5).
 - [ ] Install Tailscale (Phase 0.5) and approve the device.
 - [ ] Find your camera's RTSP URL + credentials (Phase 1).
-- [ ] Install the `ntfy` app on your phone and subscribe to your topic (Phase 2).
 - [ ] Approve macOS permissions for `Messages.app` automation (Phase 5).
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 ### `uv: command not found`
 `~/.local/bin` is not on your `$PATH`. Add this to `~/.bashrc` / `~/.zshrc`:

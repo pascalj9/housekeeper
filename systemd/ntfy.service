@@ -1,0 +1,42 @@
+# =============================================================================
+# Housekeeper · ntfy systemd user unit (Linux / WSL2)
+# =============================================================================
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/ntfy.service ~/.config/systemd/user/housekeeper-ntfy.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now housekeeper-ntfy
+#
+# Logs:
+#   journalctl --user -u housekeeper-ntfy -f
+#
+# Stop / restart:
+#   systemctl --user restart housekeeper-ntfy
+#   systemctl --user stop housekeeper-ntfy
+#
+# WSL note: systemd-as-pid1 must be enabled in /etc/wsl.conf for user units to
+# survive shell restarts. On WSL without systemd, run ntfy manually with
+#   ntfy serve --config ./configs/ntfy/server.yml &
+# =============================================================================
+
+[Unit]
+Description=Housekeeper · ntfy server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust the config path if you cloned the repo elsewhere.
+ExecStart=/usr/bin/ntfy serve --config %h/repos/housekeeper/configs/ntfy/server.yml
+Restart=on-failure
+RestartSec=3
+WorkingDirectory=%h
+
+# Per-user state directories. ntfy expands ~ from the config file relative to
+# the running user, so the same server.yml works on macOS and Linux.
+StandardOutput=append:%h/.housekeeper/var/log/ntfy.out.log
+StandardError=append:%h/.housekeeper/var/log/ntfy.err.log
+
+[Install]
+WantedBy=default.target

@@ -284,7 +284,8 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
   - **Implemented as `uv`-managed project with `src/` layout**; see [Phase 0.1 notes](#phase-01-implementation-notes) below and the [runbook](runbook.md#2-repository-setup) for daily commands.
 - [x] **0.2** Local inference + model bootstrap (Ollama install, pull baseline models, `scripts/bootstrap_models.sh`).
   - **Ollama-only for v1**, MLX deferred to Phase 6. See [Phase 0.2 notes](#phase-02-implementation-notes) and [docs/models.md](docs/models.md) for the model registry, profile breakdown, and memory budget.
-- [ ] **0.3** Self-hosted `ntfy` server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
+- [x] **0.3** Self-hosted `ntfy` server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
+  - **`NtfyNotifier` + service files for both platforms**; see [Phase 0.3 notes](#phase-03-implementation-notes) and the [runbook §5](runbook.md#5-notifications--ntfy-phase-03) for the full install/subscribe flow.
 - [ ] **0.4** Local NATS server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
 - [ ] **0.5** Tailscale (ops install + `housekeeper doctor` reachability probe).
 - [ ] **0.6** Build `housekeeper doctor` CLI (verifies camera reachability, model load, bus connectivity, ntfy push).
@@ -323,6 +324,30 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
 **Test discipline**: 20 new tests cover schema validation, profile resolution, name-matching edge cases (`moondream` ↔ `moondream:latest`), platform branching for MLX, and the new CLI subcommands. Integration tests against a real Ollama daemon are tagged `@pytest.mark.integration` and will be added once we wire `housekeeper doctor` end-to-end in Phase 0.6.
 
 **Ops dependency**: actually pulling weights requires Ollama installed on the host. The runbook ([§4.1](runbook.md#41-install-ollama)) documents both the Homebrew path (Mac) and the curl-installer path (WSL).
+
+#### Phase 0.3 implementation notes
+
+**Why ntfy**: single-binary, self-hostable, has a polished iOS/Android app, supports rich pushes (title, priority, tags, click-through, image attachments). The same server works for both the Mac (prod) and WSL (dev) — we just deploy two instances, each subscribed to a different topic.
+
+**Two-config split**: `configs/services.yaml` holds Housekeeper's view (endpoint + topic + optional auth token); `configs/ntfy/server.yml` holds ntfy's *own* server config (listen address, cache, attachment limits). Keeping them separate means a future swap to a different notifier doesn't churn the ntfy server config and vice versa.
+
+**Default vs. local override**: defaults live in committed `services.yaml`; per-host secrets (the real topic name) go in `services.yaml.local`, which is gitignored. `housekeeper.services.load_config()` shallow-merges them — top-level keys in `.local` win over defaults, but unspecified sub-keys fall through. `housekeeper notify init` generates a `secrets.token_urlsafe(12)` topic and writes the local override, refusing to overwrite without `--force`.
+
+**Notifier API**: `housekeeper.notifier.NtfyNotifier` exposes a minimal surface — `send(title, body, priority, tags, click_url)` and `verify()`. Both are HTTP-only and accept an injected `httpx.Client`, so unit tests use `httpx.MockTransport` to assert headers/URLs without touching the network. `verify()` is the probe `housekeeper doctor` will call in Phase 0.6.
+
+**CLI**: new `housekeeper notify` subcommand group — `init` (generate topic), `show` (print resolved config), `send "title" "body"` (smoke test), `verify` (probe). Exit codes mirror the model verifier convention.
+
+**Service files**:
+- macOS: `launchd/com.housekeeper.ntfy.plist` (template — `bootstrap_ntfy.sh` rewrites `__HOUSEKEEPER_REPO__` and `__HOME__` before install). `KeepAlive=true`, `ProcessType=Background`, logs to `~/.housekeeper/var/log/ntfy.{out,err}.log`.
+- Linux/WSL: `systemd/ntfy.service` as a `--user` unit, `Restart=on-failure`. Survives shell exits on WSL2 with systemd-as-pid1 enabled; users without that drop to `ntfy serve --config … &`.
+
+**State directories**: ntfy writes to `~/.housekeeper/var/ntfy/` (cache.db + attachments) and `~/.housekeeper/var/log/`. `scripts/bootstrap_ntfy.sh` creates them idempotently and prints the platform-specific install hints.
+
+**Reachability note (called out in runbook)**: ntfy must be reachable from your phone. Phase 0.3 itself binds to all interfaces; phone delivery from outside the home network requires the Tailscale step (Phase 0.5).
+
+**Test discipline**: 19 new tests cover schema/merge behaviour, header/body construction, auth header gating, click-URL injection, HTTP error → exception, and all four `notify` CLI commands using `httpx.MockTransport` and `monkeypatch.setattr` for module-level seams. Total now 52 tests / clean ruff.
+
+**Late-binding fix**: while writing the new tests we also discovered `models.verify_one`'s default `ollama_lister=_list_ollama_models` captured the function at def time, so monkeypatching the module attribute did nothing. The default is now `None` with a call-time lookup, restoring the documented test seam.
 
 ### Phase 1 — Video Pipeline MVP
 - [ ] **1.1** `apps/ingest`: RTSP → frame ring buffer (ffmpeg/PyAV).

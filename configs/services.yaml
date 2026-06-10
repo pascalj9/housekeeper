@@ -1,0 +1,24 @@
+# =============================================================================
+# Housekeeper services registry
+#
+# Defaults for every local service Housekeeper talks to. Per-host overrides
+# go in `configs/services.yaml.local` (gitignored), e.g. a generated ntfy
+# topic. Both files are merged at load time by `housekeeper.services`.
+# =============================================================================
+
+ntfy:
+  # Base URL of the ntfy server. We default to localhost so the system works
+  # offline; once Tailscale is set up (Phase 0.5) you'll typically point this
+  # at the Tailnet name (e.g. http://housekeeper.<tailnet>.ts.net:8080).
+  endpoint: "http://127.0.0.1:8080"
+
+  # Default topic. Override in services.yaml.local with a random secret
+  # (`housekeeper notify init` generates one). Anyone with the topic name can
+  # publish to the server, so keep the real topic out of git.
+  topic: "housekeeper-default"
+
+  # Optional bearer token for ntfy auth. v1 leaves this null; Phase 8
+  # (Robustness & Ops) adds token-based access control.
+  auth_token: null
+
+# nats: (added in Phase 0.4)

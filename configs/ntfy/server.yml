@@ -1,0 +1,33 @@
+# =============================================================================
+# ntfy server config (consumed by `ntfy serve --config <this-file>`).
+# Reference: https://docs.ntfy.sh/config/
+#
+# Housekeeper deliberately keeps this minimal:
+#   - Listen on every interface so the phone can reach us over Tailscale.
+#     Bind to 127.0.0.1 only if you have not yet set up Tailscale.
+#   - Cache + DB land under ~/.housekeeper/var/ntfy/ (gitignored).
+#   - No auth in v1; Phase 8 (Robustness & Ops) will add a bearer token.
+#
+# Edit `base-url` to your Tailnet name once Tailscale is up, e.g.
+#   base-url: "http://housekeeper.<tailnet>.ts.net:8080"
+# =============================================================================
+
+listen-http: ":8080"
+base-url: "http://localhost:8080"
+
+# State directories — created by `scripts/bootstrap_ntfy.sh` (Phase 0.3).
+cache-file: "~/.housekeeper/var/ntfy/cache.db"
+attachment-cache-dir: "~/.housekeeper/var/ntfy/attachments"
+
+# Attachments: keep them small and short-lived for snapshot pushes.
+attachment-total-size-limit: "500M"
+attachment-file-size-limit: "10M"
+attachment-expiry-duration: "24h"
+
+# Behaviour-of-record settings used by `housekeeper notify`.
+visitor-message-daily-limit: 10000
+keepalive-interval: "45s"
+
+# Auth (disabled for v1, deny-all once enabled — Phase 8).
+# auth-file: "~/.housekeeper/var/ntfy/auth.db"
+# auth-default-access: "deny-all"

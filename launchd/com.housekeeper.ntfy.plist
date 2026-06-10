@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Housekeeper · ntfy launchd job
+  --------------------------------
+  Install (per-user):
+    mkdir -p ~/Library/LaunchAgents
+    cp launchd/com.housekeeper.ntfy.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.housekeeper.ntfy.plist
+
+  Stop / restart:
+    launchctl kickstart -k gui/$UID/com.housekeeper.ntfy
+    launchctl bootout    gui/$UID ~/Library/LaunchAgents/com.housekeeper.ntfy.plist
+
+  Apple Silicon assumption: Homebrew installs ntfy at /opt/homebrew/bin/ntfy.
+  Edit the ProgramArguments path if you're on Intel macOS (/usr/local/bin/ntfy).
+
+  The config and state directories live under the repo's home:
+    config  : ~/repos/housekeeper/configs/ntfy/server.yml
+    state   : ~/.housekeeper/var/ntfy/
+    logs    : ~/.housekeeper/var/log/ntfy.{out,err}.log
+
+  Adjust the config path below if you cloned the repo elsewhere.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.housekeeper.ntfy</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/ntfy</string>
+    <string>serve</string>
+    <string>--config</string>
+    <string>__HOUSEKEEPER_REPO__/configs/ntfy/server.yml</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/.housekeeper/var/log/ntfy.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__HOME__/.housekeeper/var/log/ntfy.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__HOME__</string>
+  </dict>
+</dict>
+</plist>
