@@ -93,10 +93,17 @@ secrets/
 ~/.housekeeper/secrets
 
 # ---- Local config overrides -------------------------------------------------
+# Match both common naming conventions: foo.local.yaml AND foo.yaml.local
+# (Housekeeper uses the latter for services.yaml.local).
 configs/*.local.yaml
+configs/*.local.yml
+configs/*.yaml.local
+configs/*.yml.local
 configs/local/
 *.local.yaml
 *.local.yml
+*.yaml.local
+*.yml.local
 
 # ---- Models / weights (large, fetched by bootstrap_models.sh) --------------
 models/
@@ -108,6 +115,14 @@ models/
 *.onnx
 *.mlpackage/
 *.mlmodelc/
+
+# ---- Ops downloads (release tarballs and extracted dirs) -------------------
+ntfy_*/
+ntfy_*.tar.gz
+nats-server-*/
+nats-server-*.tar.gz
+*.deb
+*.rpm
 
 # ---- Runtime data (timeline DB, vector index, snapshots, logs) -------------
 data/

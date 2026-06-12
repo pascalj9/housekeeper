@@ -36,16 +36,20 @@ EOF
     ;;
   Linux)
     cat <<EOF
-  1. Install ntfy (Debian/Ubuntu):
-       curl -sSL https://archive.heckel.io/apt/pubkey.txt | sudo apt-key add -
-       sudo apt-add-repository 'deb https://archive.heckel.io/apt /'
-       sudo apt update && sudo apt install ntfy
+  1. Install ntfy (release tarball — most reliable):
+       VER=2.11.0
+       ARCH=\$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+       curl -fsSL "https://github.com/binwiederhier/ntfy/releases/download/v\${VER}/ntfy_\${VER}_linux_\${ARCH}.tar.gz" \\
+         | sudo tar -xz -C /tmp
+       sudo install -m 0755 /tmp/ntfy_\${VER}_linux_\${ARCH}/ntfy /usr/local/bin/ntfy
   2. Install systemd user unit:
+       # Re-copy the unit so it picks up the env-based PATH lookup
        mkdir -p ~/.config/systemd/user
        cp "${REPO_ROOT}/systemd/ntfy.service" \\
           ~/.config/systemd/user/housekeeper-ntfy.service
        systemctl --user daemon-reload
        systemctl --user enable --now housekeeper-ntfy
+       systemctl --user status housekeeper-ntfy --no-pager
   3. Verify:          uv run housekeeper notify verify
 EOF
     ;;

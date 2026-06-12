@@ -165,10 +165,24 @@ ntfy phone app subscribes to a private topic and gets pushes.
 brew install ntfy
 ```
 
-**WSL2 / Linux** (dev host) — official apt repo:
+**WSL2 / Linux** (dev host) — single-binary release (most reliable):
 ```bash
-curl -sSL https://archive.heckel.io/apt/pubkey.txt | sudo apt-key add -
-sudo apt-add-repository 'deb https://archive.heckel.io/apt /'
+# Pick the current release tag from https://github.com/binwiederhier/ntfy/releases
+VER=2.11.0
+ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+curl -fsSL "https://github.com/binwiederhier/ntfy/releases/download/v${VER}/ntfy_${VER}_linux_${ARCH}.tar.gz" \
+  | sudo tar -xz -C /tmp
+sudo install -m 0755 /tmp/ntfy_${VER}_linux_${ARCH}/ntfy /usr/local/bin/ntfy
+ntfy --version
+```
+
+Alternative — official apt repo (signed-by, not the deprecated `apt-key`):
+```bash
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://archive.heckel.io/apt/pubkey.txt \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/archive.heckel.io.gpg
+echo "deb [signed-by=/etc/apt/keyrings/archive.heckel.io.gpg] https://archive.heckel.io/apt /" \
+  | sudo tee /etc/apt/sources.list.d/archive.heckel.io.list >/dev/null
 sudo apt update && sudo apt install ntfy
 ```
 

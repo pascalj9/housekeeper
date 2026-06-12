@@ -27,8 +27,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Resolve ntfy from PATH so this works whether you installed via apt
+# (/usr/bin/ntfy) or a release tarball (/usr/local/bin/ntfy). We invoke
+# bash explicitly because systemd's ExecStart does not do PATH lookup
+# on the first token.
 # Adjust the config path if you cloned the repo elsewhere.
-ExecStart=/usr/bin/ntfy serve --config %h/repos/housekeeper/configs/ntfy/server.yml
+ExecStart=/usr/bin/env ntfy serve --config %h/repos/housekeeper/configs/ntfy/server.yml
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Restart=on-failure
 RestartSec=3
 WorkingDirectory=%h
