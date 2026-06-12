@@ -286,7 +286,8 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
   - **Ollama-only for v1**, MLX deferred to Phase 6. See [Phase 0.2 notes](#phase-02-implementation-notes) and [docs/models.md](docs/models.md) for the model registry, profile breakdown, and memory budget.
 - [x] **0.3** Self-hosted `ntfy` server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
   - **`NtfyNotifier` + service files for both platforms**; see [Phase 0.3 notes](#phase-03-implementation-notes) and the [runbook §5](runbook.md#5-notifications--ntfy-phase-03) for the full install/subscribe flow.
-- [ ] **0.4** Local NATS server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
+- [x] **0.4** Local NATS server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
+  - **NATS + JetStream wired through `housekeeper.bus.Bus`**; see [Phase 0.4 notes](#phase-04-implementation-notes), [docs/bus.md](docs/bus.md) for the subject contract, and [runbook §6](runbook.md#6-event-bus--nats-phase-04) for the ops flow.
 - [ ] **0.5** Tailscale (ops install + `housekeeper doctor` reachability probe).
 - [ ] **0.6** Build `housekeeper doctor` CLI (verifies camera reachability, model load, bus connectivity, ntfy push).
 - [ ] **0.7** **Deliverable**: `housekeeper doctor` passes end-to-end.
@@ -348,6 +349,32 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
 **Test discipline**: 19 new tests cover schema/merge behaviour, header/body construction, auth header gating, click-URL injection, HTTP error → exception, and all four `notify` CLI commands using `httpx.MockTransport` and `monkeypatch.setattr` for module-level seams. Total now 52 tests / clean ruff.
 
 **Late-binding fix**: while writing the new tests we also discovered `models.verify_one`'s default `ollama_lister=_list_ollama_models` captured the function at def time, so monkeypatching the module attribute did nothing. The default is now `None` with a call-time lookup, restoring the documented test seam.
+
+#### Phase 0.4 implementation notes
+
+**Why NATS**: single-binary, fast, well-suited to many-producer / many-consumer; JetStream gives durable replayable streams for `video.events`; first-class async Python client (`nats-py`). Single backend covers pub/sub, req/reply, and durable streams — no need to bolt on Redis later.
+
+**Subject contract**: the canonical list of subjects (`video.events`, `chat.inbound`/`outbound`, `agent.commands`, `notify.outbound`) and their durability properties live in [`docs/bus.md`](docs/bus.md). Only `video.events` is durable; everything else is fire-and-forget. Schemas (pydantic models) land in Phase 1 when the first real producer appears.
+
+**Two-config split**: NATS server config (`configs/nats/server.conf`) describes the server itself; `services.yaml` describes the *client* view (URL, stream policy, reconnect tuning). `JS_STORE_DIR` is injected via service-unit environment variables because NATS does not expand `~` inside its config file (same lesson as ntfy in 0.3).
+
+**Wrapper (`housekeeper.bus.Bus`)**: thin async layer over `nats-py`. Centralises connection lifecycle, JetStream stream provisioning (`ensure_stream`), and a `verify()` probe that `housekeeper doctor` will call. Built with a pluggable `ConnectorFn` so unit tests run entirely against an in-memory fake — no real NATS required.
+
+**TCP pre-probe**: `nats-py`'s connect loop swallows `ConnectionRefused` into a confusing `CancelledError` and dumps a stack trace through its logger. `Bus.verify()` runs a targeted `asyncio.open_connection` first so users see actionable messages (`[Errno 111] Connect call failed`) instead of `CancelledError:`. The `nats` logger is also temporarily silenced for `verify()` to keep terminal output clean.
+
+**CLI**: `housekeeper bus {verify, init, info, publish, sub}` subcommand group. `init` creates / updates the JetStream stream; safe to re-run. `sub` is a tiny tailer (`-n N` to bound).
+
+**JetStream stream config**: `HOUSEKEEPER_VIDEO`, subjects `video.events`, `video.events.>`, 24h retention, 500 MB cap, file storage. Provisioning is idempotent and lives in code (`Bus.ensure_stream`), not the server config — so the stream definition stays close to the producer.
+
+**JetStream gotcha (caught during build)**: `nats-py`'s `StreamConfig.max_age` expects **seconds** and multiplies to ns internally. I initially passed nanoseconds, which produced a number too large for the server's JSON parser (`code=400 err_code=10025 description='invalid JSON'`). Fixed by passing the seconds value as-is.
+
+**Service files**:
+- macOS: `launchd/com.housekeeper.nats.plist` (template — `bootstrap_nats.sh` rewrites placeholders before install). `KeepAlive=true`, logs to `~/.housekeeper/var/log/nats.{out,err}.log`.
+- Linux/WSL: `systemd/nats.service` as a `--user` unit, `Restart=on-failure`. `ExecStart=/usr/bin/env nats-server -c …` so PATH lookup finds both `/usr/bin/` (apt) and `/usr/local/bin/` (tarball) installs.
+
+**Test discipline**: 19 new tests covering schema, lifecycle, pub/sub, JetStream provisioning, TCP probe and host/port parser. `pytest-asyncio` enabled in auto mode so async tests need no decorator. Total: 75 tests / 89% coverage / ruff clean.
+
+**Verified end-to-end on WSL**: nats-server v2.10.20 running as systemd user unit → `bus verify` returns `rtt=0.3ms` → `bus init` creates the stream → publish + `bus info` shows the messages → `bus sub` receives them.
 
 ### Phase 1 — Video Pipeline MVP
 - [ ] **1.1** `apps/ingest`: RTSP → frame ring buffer (ffmpeg/PyAV).

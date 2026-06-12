@@ -7,6 +7,7 @@ The CLI is the single user-facing surface for ops tasks: ``housekeeper doctor``
 
 from __future__ import annotations
 
+import asyncio
 import platform
 import secrets
 import sys
@@ -17,7 +18,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
-from housekeeper import __version__, models, notifier, services
+from housekeeper import __version__, bus, models, notifier, services
 
 app = typer.Typer(
     name="housekeeper",
@@ -41,6 +42,14 @@ notify_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(notify_app)
+
+# Subcommand group: ``housekeeper bus ...``
+bus_app = typer.Typer(
+    name="bus",
+    help="Interact with the local NATS event bus.",
+    no_args_is_help=True,
+)
+app.add_typer(bus_app)
 
 console = Console()
 
@@ -228,6 +237,120 @@ def notify_verify() -> None:
     else:
         console.print(f"[red]{result.status}[/red] {result.endpoint} — {result.detail}")
         raise typer.Exit(code=1)
+
+
+# ---------------------------------------------------------------------------
+# bus subcommand group
+# ---------------------------------------------------------------------------
+
+
+@bus_app.command("verify")
+def bus_verify() -> None:
+    """Probe the local NATS server. Returns 0 if reachable, 1 otherwise."""
+
+    async def _run() -> bus.BusVerifyResult:
+        return await bus.Bus().verify()
+
+    result = asyncio.run(_run())
+    if result.ok:
+        console.print(f"[green]{result.status}[/green] {result.url} ({result.detail})")
+    else:
+        console.print(f"[red]{result.status}[/red] {result.url} — {result.detail}")
+        raise typer.Exit(code=1)
+
+
+@bus_app.command("init")
+def bus_init() -> None:
+    """Create or update the JetStream stream that holds video.events."""
+
+    async def _run() -> tuple[bool, str, list[str]]:
+        async with bus.Bus() as b:
+            created, cfg = await b.ensure_stream()
+        return created, cfg.name, list(cfg.subjects or [])
+
+    try:
+        created, name, subjects = asyncio.run(_run())
+    except Exception as exc:
+        console.print(f"[red]bus init failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    verb = "[green]created[/green]" if created else "[cyan]updated[/cyan]"
+    console.print(f"{verb} stream [bold]{name}[/bold]")
+    console.print(f"  subjects: {', '.join(subjects)}")
+
+
+@bus_app.command("info")
+def bus_info() -> None:
+    """Show JetStream stream state (subjects, message count, bytes)."""
+
+    async def _run() -> dict[str, object]:
+        async with bus.Bus() as b:
+            return await b.stream_info()
+
+    try:
+        info = asyncio.run(_run())
+    except Exception as exc:
+        console.print(f"[red]bus info failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    table = Table(title=f"JetStream: {info['name']}", show_lines=False)
+    table.add_column("field", style="cyan")
+    table.add_column("value")
+    for key in ("subjects", "messages", "bytes", "first_seq", "last_seq"):
+        table.add_row(key, str(info[key]))
+    console.print(table)
+
+
+@bus_app.command("publish")
+def bus_publish(
+    subject: str = typer.Argument(..., help="NATS subject, e.g. video.events.test"),
+    payload: str = typer.Argument(..., help="Message body (UTF-8 string)."),
+) -> None:
+    """Publish a one-off message (smoke test)."""
+
+    async def _run() -> None:
+        async with bus.Bus() as b:
+            await b.publish(subject, payload.encode("utf-8"))
+
+    try:
+        asyncio.run(_run())
+    except Exception as exc:
+        console.print(f"[red]publish failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]published[/green] {len(payload)}B → {subject}")
+
+
+@bus_app.command("sub")
+def bus_sub(
+    subject: str = typer.Argument(..., help="NATS subject or wildcard, e.g. video.events.>"),
+    count: int = typer.Option(
+        0, "--count", "-n", help="Stop after N messages (0 = run until Ctrl-C)."
+    ),
+) -> None:
+    """Subscribe to a subject and print messages until Ctrl-C or --count hit."""
+
+    async def _run() -> int:
+        received = 0
+        async with bus.Bus() as b:
+            async for msg in b.subscribe_iter(subject):
+                received += 1
+                console.print(
+                    f"[dim]#{received:04d}[/dim] [cyan]{msg.subject}[/cyan] "
+                    f"{msg.data.decode('utf-8', errors='replace')}"
+                )
+                if count and received >= count:
+                    break
+        return received
+
+    try:
+        n = asyncio.run(_run())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]interrupted[/yellow]")
+        raise typer.Exit(code=0) from None
+    except Exception as exc:
+        console.print(f"[red]subscribe failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]done[/green] ({n} message(s) received)")
 
 
 if __name__ == "__main__":  # pragma: no cover

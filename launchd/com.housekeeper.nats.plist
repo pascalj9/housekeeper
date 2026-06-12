@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Housekeeper · NATS launchd job
+  --------------------------------
+  Install (per-user):
+    sed "s|__HOUSEKEEPER_REPO__|$PWD|g; s|__HOME__|$HOME|g" \
+        launchd/com.housekeeper.nats.plist \
+        > ~/Library/LaunchAgents/com.housekeeper.nats.plist
+    launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.housekeeper.nats.plist
+
+  Stop / restart:
+    launchctl kickstart -k gui/$UID/com.housekeeper.nats
+    launchctl bootout    gui/$UID ~/Library/LaunchAgents/com.housekeeper.nats.plist
+
+  Apple Silicon assumption: Homebrew installs nats-server at
+  /opt/homebrew/bin/nats-server. Edit ProgramArguments for Intel macOS
+  (/usr/local/bin/nats-server).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.housekeeper.nats</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/nats-server</string>
+    <string>-c</string>
+    <string>__HOUSEKEEPER_REPO__/configs/nats/server.conf</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/.housekeeper/var/log/nats.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__HOME__/.housekeeper/var/log/nats.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <!-- NATS substitutes $JS_STORE_DIR inside server.conf -->
+    <key>JS_STORE_DIR</key>
+    <string>__HOME__/.housekeeper/var/nats/jetstream</string>
+  </dict>
+</dict>
+</plist>

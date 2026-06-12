@@ -37,8 +37,23 @@ class NtfyConfig(BaseModel):
         return f"{self.endpoint.rstrip('/')}/{self.topic}"
 
 
+class NatsStreamConfig(BaseModel):
+    name: str = "HOUSEKEEPER_VIDEO"
+    subjects: list[str] = Field(default_factory=lambda: ["video.events", "video.events.>"])
+    max_age_seconds: int = Field(default=86_400, ge=0)
+    max_bytes: int = Field(default=500 * 1024 * 1024, ge=0)
+
+
+class NatsConfig(BaseModel):
+    url: str = "nats://127.0.0.1:4222"
+    stream: NatsStreamConfig = Field(default_factory=NatsStreamConfig)
+    max_reconnect_attempts: int = -1  # forever
+    reconnect_time_wait_seconds: float = 2.0
+
+
 class ServicesConfig(BaseModel):
     ntfy: NtfyConfig = Field(default_factory=NtfyConfig)
+    nats: NatsConfig = Field(default_factory=NatsConfig)
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:

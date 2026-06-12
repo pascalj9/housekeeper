@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
 import yaml
 from typer.testing import CliRunner
 
-from housekeeper import __version__, models, notifier, services
+from housekeeper import __version__, bus, models, notifier, services
 from housekeeper.cli import app
 
 runner = CliRunner()
@@ -234,3 +236,144 @@ def test_notify_verify_returns_one_on_unreachable(
     result = runner.invoke(app, ["notify", "verify"])
     assert result.exit_code == 1
     assert "unreachable" in result.stdout.lower()
+
+
+# ---------------------------------------------------------------------------
+# ``housekeeper bus`` subcommand group
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _BusStub:
+    """Records every Bus method the CLI calls, no NATS required."""
+
+    verify_result: bus.BusVerifyResult | None = None
+    ensure_result: tuple[bool, Any] | None = None
+    info_result: dict[str, Any] | None = None
+    published: list[tuple[str, bytes]] | None = None
+    verify_raises: Exception | None = None
+    ensure_raises: Exception | None = None
+    info_raises: Exception | None = None
+    publish_raises: Exception | None = None
+
+    async def __aenter__(self) -> _BusStub:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        pass
+
+    async def verify(self) -> bus.BusVerifyResult:
+        if self.verify_raises:
+            raise self.verify_raises
+        assert self.verify_result is not None
+        return self.verify_result
+
+    async def ensure_stream(self) -> tuple[bool, Any]:
+        if self.ensure_raises:
+            raise self.ensure_raises
+        assert self.ensure_result is not None
+        return self.ensure_result
+
+    async def stream_info(self) -> dict[str, Any]:
+        if self.info_raises:
+            raise self.info_raises
+        assert self.info_result is not None
+        return self.info_result
+
+    async def publish(
+        self, subject: str, payload: bytes, *, headers: dict[str, str] | None = None
+    ) -> None:
+        if self.publish_raises:
+            raise self.publish_raises
+        if self.published is not None:
+            self.published.append((subject, payload))
+
+
+def _install_bus_stub(monkeypatch: pytest.MonkeyPatch, stub: _BusStub) -> None:
+    def _factory(*_args: object, **_kwargs: object) -> _BusStub:
+        return stub
+
+    monkeypatch.setattr(bus, "Bus", _factory)
+
+
+def test_bus_verify_zero_on_reachable(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _BusStub(
+        verify_result=bus.BusVerifyResult(
+            bus.BusStatus.REACHABLE, "nats://127.0.0.1:4222", "rtt=1.0ms"
+        )
+    )
+    _install_bus_stub(monkeypatch, stub)
+    result = runner.invoke(app, ["bus", "verify"])
+    assert result.exit_code == 0
+    assert "reachable" in result.stdout.lower()
+
+
+def test_bus_verify_one_on_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _BusStub(
+        verify_result=bus.BusVerifyResult(
+            bus.BusStatus.UNREACHABLE, "nats://127.0.0.1:4222", "refused"
+        )
+    )
+    _install_bus_stub(monkeypatch, stub)
+    result = runner.invoke(app, ["bus", "verify"])
+    assert result.exit_code == 1
+    assert "unreachable" in result.stdout.lower()
+
+
+def test_bus_init_reports_created(monkeypatch: pytest.MonkeyPatch) -> None:
+    @dataclass
+    class _Cfg:
+        name: str = "HOUSEKEEPER_VIDEO"
+        subjects: list[str] = None  # type: ignore[assignment]
+
+    cfg = _Cfg(subjects=["video.events", "video.events.>"])
+    stub = _BusStub(ensure_result=(True, cfg))
+    _install_bus_stub(monkeypatch, stub)
+    result = runner.invoke(app, ["bus", "init"])
+    assert result.exit_code == 0
+    assert "created" in result.stdout.lower()
+    assert "HOUSEKEEPER_VIDEO" in result.stdout
+
+
+def test_bus_init_failure_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _BusStub(ensure_raises=OSError("connection refused"))
+    _install_bus_stub(monkeypatch, stub)
+    result = runner.invoke(app, ["bus", "init"])
+    assert result.exit_code == 1
+    assert "failed" in result.stdout.lower()
+
+
+def test_bus_info_renders_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _BusStub(
+        info_result={
+            "name": "HOUSEKEEPER_VIDEO",
+            "subjects": ["video.events"],
+            "messages": 3,
+            "bytes": 1024,
+            "first_seq": 1,
+            "last_seq": 3,
+        }
+    )
+    _install_bus_stub(monkeypatch, stub)
+    result = runner.invoke(app, ["bus", "info"])
+    assert result.exit_code == 0
+    assert "HOUSEKEEPER_VIDEO" in result.stdout
+    assert "messages" in result.stdout
+
+
+def test_bus_publish_reports_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    sink: list[tuple[str, bytes]] = []
+    stub = _BusStub(published=sink)
+    _install_bus_stub(monkeypatch, stub)
+    result = runner.invoke(app, ["bus", "publish", "video.events.test", "hello"])
+    assert result.exit_code == 0
+    assert sink == [("video.events.test", b"hello")]
+    assert "published" in result.stdout.lower()
+
+
+def test_bus_publish_failure_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _BusStub(publish_raises=OSError("refused"))
+    _install_bus_stub(monkeypatch, stub)
+    result = runner.invoke(app, ["bus", "publish", "x", "y"])
+    assert result.exit_code == 1
+    assert "failed" in result.stdout.lower()

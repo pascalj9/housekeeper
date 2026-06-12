@@ -21,4 +21,20 @@ ntfy:
   # (Robustness & Ops) adds token-based access control.
   auth_token: null
 
-# nats: (added in Phase 0.4)
+nats:
+  # NATS client URL. Loopback-only by default — the bus is internal and never
+  # needs LAN exposure. Override in services.yaml.local for unusual setups.
+  url: "nats://127.0.0.1:4222"
+
+  # JetStream stream provisioned by `housekeeper bus init`. Holds video.events
+  # for replay-after-restart.
+  stream:
+    name: "HOUSEKEEPER_VIDEO"
+    subjects: ["video.events", "video.events.>"]
+    max_age_seconds: 86400   # 24h retention
+    max_bytes: 524288000     # 500 MB on disk
+
+  # Reconnect tuning — defaults are deliberately patient; perception will hammer
+  # the bus and we'd rather wait out a 5s blip than crash a worker.
+  max_reconnect_attempts: -1   # forever
+  reconnect_time_wait_seconds: 2

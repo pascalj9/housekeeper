@@ -266,20 +266,110 @@ Re-run with `--force` to rotate the topic.
 
 ---
 
-## 6. Project layout (current)
+## 6. Event bus · NATS (Phase 0.4)
+
+NATS is Housekeeper's internal pub/sub. Subjects, payload conventions, and
+the JetStream stream layout live in [`docs/bus.md`](docs/bus.md). This section
+covers install and ops.
+
+### 6.1 Install nats-server
+
+**macOS** (production host):
+```bash
+brew install nats-server
+```
+
+**WSL2 / Linux** (dev host) — single-binary release:
+```bash
+VER=2.10.20
+ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+curl --http1.1 -fL -o /tmp/nats-server.tgz \
+  "https://github.com/nats-io/nats-server/releases/download/v${VER}/nats-server-v${VER}-linux-${ARCH}.tar.gz"
+sudo tar -xzf /tmp/nats-server.tgz -C /tmp
+sudo install -m 0755 /tmp/nats-server-v${VER}-linux-${ARCH}/nats-server /usr/local/bin/nats-server
+nats-server --version
+```
+
+> The `--http1.1` flag avoids an intermittent HTTP/2 stream error from
+> github.com on some WSL setups.
+
+### 6.2 Create state dirs + read next-step hints
+
+```bash
+./scripts/bootstrap_nats.sh
+```
+
+Idempotent. Creates `~/.housekeeper/var/nats/jetstream/` and prints the
+platform-specific service-install commands.
+
+### 6.3 Install the service unit
+
+**macOS** (launchd):
+```bash
+sed "s|__HOUSEKEEPER_REPO__|$PWD|g; s|__HOME__|$HOME|g" \
+    launchd/com.housekeeper.nats.plist \
+    > ~/Library/LaunchAgents/com.housekeeper.nats.plist
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.housekeeper.nats.plist
+```
+
+**WSL2 / Linux** (systemd user unit):
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/nats.service ~/.config/systemd/user/housekeeper-nats.service
+systemctl --user daemon-reload
+systemctl --user enable --now housekeeper-nats
+systemctl --user status housekeeper-nats --no-pager
+```
+
+### 6.4 Verify + provision JetStream
+
+```bash
+uv run housekeeper bus verify           # expect: reachable nats://127.0.0.1:4222 (rtt=...)
+uv run housekeeper bus init             # creates HOUSEKEEPER_VIDEO stream (idempotent)
+uv run housekeeper bus info             # show stream stats
+```
+
+### 6.5 Smoke test pub/sub
+
+In one shell, subscribe:
+```bash
+uv run housekeeper bus sub "video.events.>" -n 1
+```
+
+In another, publish:
+```bash
+uv run housekeeper bus publish video.events.test '{"hello":"world"}'
+```
+
+The subscriber prints the message and exits.
+
+### 6.6 CLI cheat-sheet
+
+| Command | Purpose |
+|---|---|
+| `uv run housekeeper bus verify` | Probe TCP + NATS ping |
+| `uv run housekeeper bus init` | Create / update the JetStream stream |
+| `uv run housekeeper bus info` | Stream message count, bytes, seq range |
+| `uv run housekeeper bus publish <subject> <body>` | One-off publish |
+| `uv run housekeeper bus sub <subject> [-n N]` | Subscribe, print, exit after N |
+
+---
+
+## 7. Project layout (current)
 
 ```
 housekeeper/
 ├── src/housekeeper/        # package source
 │   ├── __init__.py         # exports __version__
+│   ├── bus.py              # NATS wrapper + JetStream helpers (Phase 0.4)
 │   ├── cli.py              # Typer entry point (housekeeper ...)
 │   ├── models.py           # configs/models.yaml loader + verifier
 │   ├── notifier.py         # ntfy notifier (Phase 0.3)
 │   ├── services.py         # configs/services.yaml loader (Phase 0.3)
 │   └── platform_info.py    # OS / arch detection helpers
 ├── tests/                  # pytest suite (mirrors src/)
-├── configs/                # versioned config (models.yaml, services.yaml, ntfy/, …)
-├── scripts/                # ops scripts (bootstrap_models.sh, bootstrap_ntfy.sh)
+├── configs/                # versioned config (models.yaml, services.yaml, ntfy/, nats/)
+├── scripts/                # ops scripts (bootstrap_models.sh, bootstrap_ntfy.sh, bootstrap_nats.sh)
 ├── launchd/                # macOS service plists
 ├── systemd/                # Linux/WSL user units
 ├── docs/                   # deep-dives that don't belong inline in design.md
@@ -297,7 +387,7 @@ must use the installed editable copy via `uv run pytest`.
 
 ---
 
-## 7. Cross-platform notes
+## 8. Cross-platform notes
 
 | Concern | macOS | Linux / WSL |
 |---|---|---|
@@ -313,7 +403,7 @@ checks throughout the codebase.
 
 ---
 
-## 8. Phase status checklist
+## 9. Phase status checklist
 
 This mirrors §10 of `design.md`. Tick items here as you finish them in the
 field (vs. ticking them in the design doc, which tracks coding progress).
@@ -332,7 +422,7 @@ field (vs. ticking them in the design doc, which tracks coding progress).
 
 ---
 
-## 9. Operational tasks **you** own
+## 10. Operational tasks **you** own
 
 I (the agent) will not run these for you. They require accounts, hardware, or
 machine-level installs.
@@ -343,6 +433,8 @@ machine-level installs.
 - [ ] **Mac (later)**: install Ollama (`brew install ollama && brew services start ollama`) and run `./scripts/bootstrap_models.sh`.
 - [ ] **WSL dev (now)**: install ntfy + systemd user unit (see §5.1–5.3), then `uv run housekeeper notify init`.
 - [ ] **Mac (later)**: install ntfy + launchd plist (see §5.1–5.3), then `uv run housekeeper notify init`.
+- [ ] **WSL dev (now)**: install nats-server + systemd user unit (see §6), then `uv run housekeeper bus init`.
+- [ ] **Mac (later)**: install nats-server + launchd plist (see §6), then `uv run housekeeper bus init`.
 - [ ] Install the `ntfy` app on your phone and subscribe to your topic (§5.5).
 - [ ] Install Tailscale (Phase 0.5) and approve the device.
 - [ ] Find your camera's RTSP URL + credentials (Phase 1).
@@ -350,7 +442,7 @@ machine-level installs.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### `uv: command not found`
 `~/.local/bin` is not on your `$PATH`. Add this to `~/.bashrc` / `~/.zshrc`:

@@ -1,0 +1,43 @@
+# =============================================================================
+# Housekeeper · NATS systemd user unit (Linux / WSL2)
+# =============================================================================
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/nats.service ~/.config/systemd/user/housekeeper-nats.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now housekeeper-nats
+#
+# Logs:
+#   journalctl --user -u housekeeper-nats -f
+#
+# Stop / restart:
+#   systemctl --user restart housekeeper-nats
+#   systemctl --user stop housekeeper-nats
+# =============================================================================
+
+[Unit]
+Description=Housekeeper · NATS event bus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Resolve nats-server from PATH so this works whether installed via package
+# manager (/usr/bin/nats-server) or a release tarball (/usr/local/bin/nats-server).
+ExecStart=/usr/bin/env nats-server -c %h/repos/housekeeper/configs/nats/server.conf
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+# NATS substitutes $JS_STORE_DIR inside server.conf; we hand it an absolute
+# path because NATS does not expand ~ in config files.
+Environment=JS_STORE_DIR=%h/.housekeeper/var/nats/jetstream
+
+Restart=on-failure
+RestartSec=3
+WorkingDirectory=%h
+
+StandardOutput=append:%h/.housekeeper/var/log/nats.out.log
+StandardError=append:%h/.housekeeper/var/log/nats.err.log
+
+[Install]
+WantedBy=default.target

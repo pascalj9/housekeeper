@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0.3",
     "httpx>=0.28.1",
+    "nats-py>=2.15.0",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "pre-commit>=3.7",
+    "pytest-asyncio>=1.4.0",
 ]
 
 [project.scripts]
@@ -77,6 +79,7 @@ addopts = [
     "--strict-config",
     "--import-mode=importlib",
 ]
+asyncio_mode = "auto"
 markers = [
     "macos: tests that only run on macOS (Apple Silicon required for some).",
     "integration: tests that touch external services (camera, ntfy, NATS, LLM).",
