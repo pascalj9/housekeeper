@@ -289,6 +289,66 @@ Each phase ends with a **runnable, demoable** slice. No time estimates. Check it
 - [x] **0.4** Local NATS server (Homebrew install, `launchd` plist on macOS, `systemd --user` unit for WSL parity).
   - **NATS + JetStream wired through `housekeeper.bus.Bus`**; see [Phase 0.4 notes](#phase-04-implementation-notes), [docs/bus.md](docs/bus.md) for the subject contract, and [runbook §6](runbook.md#6-event-bus--nats-phase-04) for the ops flow.
 - [ ] **0.5** Tailscale (ops install + `housekeeper doctor` reachability probe).
+  - [ ] **0.5.1** `src/housekeeper/tailscale.py`: thin wrapper around `tailscale status --json` (`TailscaleStatus`, `verify()`, `is_installed()`).
+  - [ ] **0.5.2** CLI: `housekeeper net {status, verify}` subcommand group.
+  - [ ] **0.5.3** Tests: unit tests with fake `subprocess.run` (logged-in / logged-out / missing-binary); one `@pytest.mark.integration` test against the real CLI.
+  - [ ] **0.5.4** Optional `host_alias` in `services.yaml.local` so phone-side ntfy URL can be the Tailnet name.
+  - [ ] **0.5.5** Runbook §7: install Tailscale on host + phone, `tailscale up`, swap ntfy subscription to the Tailnet URL, verify phone push from off-LAN.
+  - [ ] **0.5.6** **Ops walkthrough (you do these)**:
+
+    **a. Install on the WSL host**
+    ```bash
+    curl -fsSL https://tailscale.com/install.sh | sh
+    sudo tailscale up
+    ```
+    `tailscale up` prints a one-time auth URL. Open it in any browser and sign in (free personal account works). When the CLI returns, you're on your tailnet.
+
+    Verify:
+    ```bash
+    tailscale status            # should list this machine + IP
+    tailscale ip -4             # your tailnet IPv4 (100.x.y.z)
+    hostname                    # used in the MagicDNS name
+    ```
+
+    **b. Find your MagicDNS name**
+    ```bash
+    tailscale status --json | grep -E '"DNSName"|"HostName"' | head -5
+    ```
+    You'll see something like `cpc-pasca-2rmg7.tail-xxxxx.ts.net.` — that's the address your phone will use. (No port forwarding, no DNS to configure.)
+
+    **c. Confirm the WSL host's ntfy is reachable on the tailnet**
+    From the WSL shell:
+    ```bash
+    curl -sS "http://$(tailscale ip -4):8080/v1/health"
+    ```
+    Should print `{"healthy":true}` or similar. If it hangs / refuses, the ntfy listener is loopback-only — set `listen-http: ":8080"` (it already is) and `sudo ufw allow in on tailscale0` if WSL has a firewall.
+
+    **d. Install Tailscale on your phone**
+    - iOS: App Store → "Tailscale" → sign in with the same account.
+    - Android: Play Store → "Tailscale" → sign in.
+    Approve the device in the Tailscale admin console if prompted.
+
+    **e. Point the ntfy phone app at the tailnet URL**
+    Open the ntfy app → your subscription → edit → **Use another server** → paste:
+    ```
+    http://<wsl-hostname>.<tailnet>.ts.net:8080
+    ```
+    Keep the same topic (the one in `configs/services.yaml.local`).
+
+    **f. Send a push from off-Wi-Fi to confirm**
+    Turn off Wi-Fi on the phone (use LTE/5G). From WSL:
+    ```bash
+    uv run housekeeper notify send "Off-Wi-Fi test" "tailnet push works" -p 4 -t house
+    ```
+    The phone should buzz within a couple seconds.
+
+    **g. (Mac, much later)** Install the macOS Tailscale app from the App Store (preferred) or `brew install --cask tailscale`. Sign in with the same account. Repeat steps (b)–(c) on the Mac; (d)–(f) you've already done on the phone.
+
+    **h. Gotchas to watch for**
+    - **Phone subscription stays on `ntfy.sh`**: if you didn't change "Use another server" the push will not arrive — verify by checking the subscription's Server field.
+    - **WSL2 sleeping**: WSL2 distros can suspend when the Windows host goes idle. Tailscale still works, but a "fully asleep" host won't deliver. For dev this is fine.
+    - **Tailscale ACLs**: default tailnet ACLs allow all traffic between your own devices. If you've tightened them, allow `port:8080` from your phone's group.
+    - **iOS background push**: ntfy uses long-poll over the tailnet. iOS may close the connection in the background; the app reopens on foreground. For instant alerts you'd need to also enable APNs in the ntfy app settings — out of scope here.
 - [ ] **0.6** Build `housekeeper doctor` CLI (verifies camera reachability, model load, bus connectivity, ntfy push).
 - [ ] **0.7** **Deliverable**: `housekeeper doctor` passes end-to-end.
 
