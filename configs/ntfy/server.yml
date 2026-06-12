@@ -2,11 +2,15 @@
 # ntfy server config (consumed by `ntfy serve --config <this-file>`).
 # Reference: https://docs.ntfy.sh/config/
 #
-# Housekeeper deliberately keeps this minimal:
-#   - Listen on every interface so the phone can reach us over Tailscale.
-#     Bind to 127.0.0.1 only if you have not yet set up Tailscale.
-#   - Cache + DB land under ~/.housekeeper/var/ntfy/ (gitignored).
-#   - No auth in v1; Phase 8 (Robustness & Ops) will add a bearer token.
+# Housekeeper keeps this file deliberately path-free — it is checked into git
+# and must work on every developer's box. Per-host paths come from environment
+# variables set by the systemd unit (Linux/WSL) or the launchd plist (macOS):
+#
+#   NTFY_CACHE_FILE             -> ~/.housekeeper/var/ntfy/cache.db
+#   NTFY_ATTACHMENT_CACHE_DIR   -> ~/.housekeeper/var/ntfy/attachments
+#
+# Running ntfy directly? Set those env vars yourself, or pass --cache-file /
+# --attachment-cache-dir on the command line.
 #
 # Edit `base-url` to your Tailnet name once Tailscale is up, e.g.
 #   base-url: "http://housekeeper.<tailnet>.ts.net:8080"
@@ -14,10 +18,6 @@
 
 listen-http: ":8080"
 base-url: "http://localhost:8080"
-
-# State directories — created by `scripts/bootstrap_ntfy.sh` (Phase 0.3).
-cache-file: "~/.housekeeper/var/ntfy/cache.db"
-attachment-cache-dir: "~/.housekeeper/var/ntfy/attachments"
 
 # Attachments: keep them small and short-lived for snapshot pushes.
 attachment-total-size-limit: "500M"

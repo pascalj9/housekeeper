@@ -55,6 +55,11 @@
   <dict>
     <key>HOME</key>
     <string>__HOME__</string>
+    <!-- ntfy does not expand ~ in YAML; we pass absolute paths via env -->
+    <key>NTFY_CACHE_FILE</key>
+    <string>__HOME__/.housekeeper/var/ntfy/cache.db</string>
+    <key>NTFY_ATTACHMENT_CACHE_DIR</key>
+    <string>__HOME__/.housekeeper/var/ntfy/attachments</string>
   </dict>
 </dict>
 </plist>

@@ -34,6 +34,12 @@ Type=simple
 # Adjust the config path if you cloned the repo elsewhere.
 ExecStart=/usr/bin/env ntfy serve --config %h/repos/housekeeper/configs/ntfy/server.yml
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+# Per-host path overrides (ntfy does NOT expand ~ in YAML, so we pass
+# absolute paths through env vars instead). %h is the user's $HOME.
+Environment=NTFY_CACHE_FILE=%h/.housekeeper/var/ntfy/cache.db
+Environment=NTFY_ATTACHMENT_CACHE_DIR=%h/.housekeeper/var/ntfy/attachments
+
 Restart=on-failure
 RestartSec=3
 WorkingDirectory=%h
